@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,20 +11,39 @@ import (
 	"strings"
 )
 
-func main() {
-	// TODO: read those from a configuration file, probably in JSON
-	// or YAML if I'm feeling brave.
-	headers := []string{
-		"AGE-SECRET-KEY",              // agenix secret keys
-		"BEGIN OPENSSH PRIVATE KEY",   // I don't think I can possibly commit those by accident but still
-		"BEGIN PGP PRIVATE KEY BLOCK", // "
-		"PRIVATE",                     // Not sure if I have a file with "PRIVATE" as a header, but no harm including this
-	}
+type Config struct {
+	Headers         []string `json:"headers"`
+	ExcludePatterns []string `json:"excludePatterns"`
+}
 
-	excludePatterns := []string{
-		"modules/roles/server/system/services/forgejo.nix", // PRIVATE is an infix here
-		".git", // avoid parsing the git history
-		"*.go", // avoid false positives in `go run`
+func loadConfig(configPath string) (*Config, error) {
+	file, err := os.Open(configPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	config := &Config{}
+	if err := decoder.Decode(config); err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+func main() {
+	// Define a flag for the configuration file path
+	configPath := flag.String("config", "configuration.json", "Path to the configuration JSON file")
+	flag.Parse()
+
+	config, err := loadConfig(*configPath)
+	if err != nil {
+		fmt.Printf("Error loading configuration: %v\n", err)
+		os.Exit(1)
+	}
+	if err != nil {
+		fmt.Printf("Error loading configuration: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Search in the directory the program is being called from
@@ -33,9 +54,9 @@ func main() {
 	}
 
 	// Compile regex patterns for exclusion
-	excludeRegexes := make([]*regexp.Regexp, len(excludePatterns))
-	for i, pattern := range excludePatterns {
-		patternRegex := regexp.MustCompile(strings.ReplaceAll(regexp.QuoteMeta(searchDir+pattern), "\\*", ".*"))
+	excludeRegexes := make([]*regexp.Regexp, len(config.ExcludePatterns))
+	for i, pattern := range config.ExcludePatterns {
+		patternRegex := regexp.MustCompile(strings.ReplaceAll(regexp.QuoteMeta(searchDir+string(os.PathSeparator)+pattern), "\\*", ".*"))
 		excludeRegexes[i] = patternRegex
 	}
 
@@ -68,7 +89,7 @@ func main() {
 			lineNumber := 1
 			for scanner.Scan() {
 				line := scanner.Text()
-				for _, header := range headers {
+				for _, header := range config.Headers {
 					if strings.Contains(line, header) {
 						fmt.Printf("Sensitive keyword '%s' found in file '%s' on line %d\n", header, path, lineNumber)
 						sensitiveContentFound = true

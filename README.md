@@ -6,7 +6,5 @@ and slightly less than a full fledged Rust program.
 
 ## Using
 
-There is no configurability, so you will need to edit `main.go` to add your
-regular expressions to the list. Build with `go build`, and install it anywhere
-in your PATH. Running `inquisitor` will scan the current directory for certain
-headers that indicate sensitive content in the file.
+Add "private" headers and path regular expressions to a `configuration.json` and
+pass `--config=path/to/configuration.json` to the program.
